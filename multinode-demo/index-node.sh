@@ -13,7 +13,6 @@ args=(
 )
 airdrops_enabled=1
 node_sol=500 # 500 SOL: number of SOL to airdrop the node for transaction fees and vote account rent exemption (ignored if airdrops_enabled=0)
-label=
 identity=
 vote_account=
 no_restart=0
@@ -34,8 +33,6 @@ Start a validator with no stake
 OPTIONS:
   --ledger PATH             - store ledger under this PATH
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --label LABEL             - Append the given label to the configuration files, useful when running
-                              multiple validators in the same workspace
   --node-sol SOL            - Number of SOL this node has been funded from the genesis config (default: $node_sol)
   --no-voting               - start node without vote signer
   --rpc-port port           - custom RPC port for this node
@@ -52,10 +49,7 @@ positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
     # validator.sh-only options
-    if [[ $1 = --label ]]; then
-      label="-$2"
-      shift 2
-    elif [[ $1 = --no-restart ]]; then
+    if [[ $1 = --no-restart ]]; then
       no_restart=1
       shift
     elif [[ $1 = --node-sol ]]; then
@@ -108,9 +102,6 @@ while [[ -n $1 ]]; do
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --rpc-port ]]; then
-      args+=("$1" "$2")
-      shift 2
-    elif [[ $1 = --rpc-faucet-address ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = --accounts ]]; then
@@ -220,16 +211,10 @@ if [[ -n $REQUIRE_KEYPAIRS ]]; then
   if [[ -z $identity ]]; then
     usage "Error: --identity not specified"
   fi
-  if [[ -z $vote_account ]]; then
-    usage "Error: --vote-account not specified"
-  fi
-  if [[ -z $authorized_withdrawer ]]; then
-    usage "Error: --authorized_withdrawer not specified"
-  fi
 fi
 
 if [[ -z "$ledger_dir" ]]; then
-  ledger_dir="$SOLANA_CONFIG_DIR/validator$label"
+  ledger_dir="$SOLANA_CONFIG_DIR/index-node"
 fi
 mkdir -p "$ledger_dir"
 
@@ -249,24 +234,26 @@ else
   fi
 fi
 
-faucet_address="${gossip_entrypoint%:*}":9900
 
 : "${identity:=$ledger_dir/identity.json}"
 : "${vote_account:=$ledger_dir/vote-account.json}"
 : "${authorized_withdrawer:=$ledger_dir/authorized-withdrawer.json}"
 
 default_arg --entrypoint "$gossip_entrypoint"
-if ((airdrops_enabled)); then
-  default_arg --rpc-faucet-address "$faucet_address"
-fi
+
 
 default_arg --identity "$identity"
-default_arg --vote-account "$vote_account"
 default_arg --ledger "$ledger_dir"
 default_arg --log -
-default_arg --full-rpc-api
 default_arg --no-incremental-snapshots
 default_arg --allow-private-addr
+
+default_arg --no-voting
+default_arg --dynamic-port-range 12001-14000
+default_arg --gossip-port 8003
+default_arg --entrypoint 127.0.0.1:8001
+default_arg --geyser-plugin-always-enabled
+default_arg --geyser-plugin-config /home/ubuntu/ytest/solana-accountsdb-plugin-kafka/config.json
 
 if [[ $maybeRequireTower = true ]]; then
   default_arg --require-tower
@@ -315,22 +302,6 @@ setup_validator_accounts() {
     return 0
   fi
 
-  if ! wallet vote-account "$vote_account"; then
-    if ((airdrops_enabled)); then
-      echo "Adding $node_sol to validator identity account:"
-      (
-        set -x
-        $solana_cli \
-          --keypair "$SOLANA_CONFIG_DIR/faucet.json" --url "$rpc_url" \
-          transfer --allow-unfunded-recipient "$identity" "$node_sol"
-      ) || return $?
-    fi
-
-    echo "Creating validator vote account"
-    wallet create-vote-account "$vote_account" "$identity" "$authorized_withdrawer" || return $?
-  fi
-  echo "Validator vote account configured"
-
   echo "Validator identity account balance:"
   wallet balance || return $?
 
@@ -358,7 +329,7 @@ while true; do
   printf 'Command:\n  %s' "$program"
   for arg in "${args[@]}"; do printf ' %q' "$arg"; done
   printf '\n'
-  read -p "Press enter to start the bootstrap validator node"
+  read -p "Press enter to start the rpc node"
   
   $program "${args[@]}" &
   pid=$!

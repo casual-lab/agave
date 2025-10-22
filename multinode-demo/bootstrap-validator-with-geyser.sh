@@ -159,6 +159,7 @@ args+=(
   --no-wait-for-vote-to-start-leader
   --full-rpc-api
   --allow-private-addr
+  --geyser-plugin-config /home/ubuntu/ytest/solana-accountsdb-plugin-kafka/config.json
 )
 default_arg --gossip-port 8001
 default_arg --log -
