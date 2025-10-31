@@ -63,4 +63,16 @@ default_arg --faucet-lamports 500000000000000000
 default_arg --hashes-per-tick auto
 default_arg --cluster-type development
 
+
+# Print final args for debugging so the user can see what will be passed to solana-genesis
+echo "[setup.sh] Final solana-genesis args (count=${#args[@]}):"
+# Print as a single joined line
+printf '%s ' "${args[@]}"
+echo
+# Also print each arg on its own line with index for clarity
+for i in "${!args[@]}"; do
+  printf '  [%s] %s\n' "$i" "${args[$i]}"
+done
+
+read -p "Press enter to continue"
 $solana_genesis "${args[@]}"
